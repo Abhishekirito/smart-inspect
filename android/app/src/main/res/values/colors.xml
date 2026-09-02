@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The Capacitor android template's styles.xml references these three colours but
+  ships no colors.xml, so aapt2 fails on a fresh platform without this file.
+  Values mirror the web brand palette in tailwind.config.js (brand-600/700).
+-->
+<resources>
+    <color name="colorPrimary">#1f5ff5</color>
+    <color name="colorPrimaryDark">#184ae1</color>
+    <color name="colorAccent">#1f5ff5</color>
+
+    <!-- Painted behind the web view, and behind the system bars once Android
+         draws edge to edge, so it has to match the app's own background. -->
+    <color name="windowBackground">#ffffff</color>
+</resources>

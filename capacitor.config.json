@@ -1,0 +1,20 @@
+{
+  "appId": "com.smartinspect.app",
+  "appName": "Smart Inspect",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "SystemBars": {
+      "style": "LIGHT",
+      "insetsHandling": "css"
+    },
+    "SplashScreen": {
+      "launchAutoHide": true,
+      "launchShowDuration": 900,
+      "backgroundColor": "#1f5ff5",
+      "showSpinner": false
+    }
+  }
+}

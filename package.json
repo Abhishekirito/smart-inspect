@@ -1,0 +1,39 @@
+{
+  "name": "smart-inspect",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "AI-Powered Legal Metrology (Packaged Commodities) Rules 2011 Compliance Scanner",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node src/lib/onboarding.test.mjs && node src/lib/replyShape.test.mjs",
+    "android:sync": "vite build && cap sync android",
+    "android": "npm run android:sync && cap open android",
+    "android:run": "npm run android:sync && cap run android",
+    "android:apk": "npm run android:sync && cd android && gradlew.bat assembleDebug"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.1",
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/core": "^8.5.1",
+    "@capacitor/keyboard": "^8.0.5",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@supabase/supabase-js": "^2.112.4",
+    "localforage": "^1.10.0",
+    "lucide-react": "^0.454.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.2",
+    "recharts": "^2.12.7"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.1",
+    "@vitejs/plugin-react": "^4.3.2",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.13",
+    "vite": "^5.4.8"
+  }
+}
