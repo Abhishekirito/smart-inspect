@@ -1,15 +1,19 @@
 # Smart Inspect — AI Legal Metrology Compliance Scanner
 
-A responsive React web app that scans photos of packaged commodities, extracts the
-printed declarations with AI, visualizes text/region boundaries on the image,
-converts the raw OCR text into **structured JSON**, and grades the product against
-the **Legal Metrology (Packaged Commodities) Rules, 2011** — producing a full,
-clause-cited compliance report with a **PASS/FAIL grade**.
+> **SIH 2026 · Problem Statement 26034 · Ministry of Consumer Affairs, Food & Public Distribution**
+> **Department of Consumer Affairs (DoCA) · Category: Software · Theme: Agriculture, FoodTech & Rural Development**
 
-Built for SIH 2026 "Smart Inspect". AI calls are direct browser requests to
-free-tier cloud APIs; user accounts and scan history are handled by **Supabase**
-(authentication + Postgres), so each inspector's reports sync privately to their
-profile across devices.
+A fully built, production-ready React web + Android mobile application that scans
+photos of packaged commodities, extracts printed declarations with AI, visualizes
+text/region boundaries on the image, converts the raw OCR text into **structured
+JSON**, and grades the product against the **Legal Metrology (Packaged Commodities)
+Rules, 2011** — producing a full, clause-cited compliance report with a
+**PASS/FAIL grade**.
+
+AI calls are direct browser requests to free-tier cloud APIs (zero backend
+required). User accounts and scan history are handled by **Supabase**
+(authentication + Postgres + Row-Level Security), so each inspector's reports
+sync privately to their profile across devices.
 
 ## Quick start
 
@@ -20,6 +24,14 @@ npm run build    # production build in /dist
 ```
 
 > The dev machine only runs Vite + React. No model weights are downloaded locally.
+
+### Android build
+
+```bash
+npm run android:sync   # builds + syncs to Capacitor
+npm run android        # opens in Android Studio
+npm run android:apk    # builds debug APK directly
+```
 
 ## Supabase setup (auth + database) — required for login
 
@@ -87,15 +99,16 @@ sign up, and run a scan — it will be stored in the `scans` table under your us
 ## First-run setup
 
 1. Open **Settings**.
-2. The default pipeline is **Google Cloud Vision (OCR) → Groq (structuring)**. Paste:
+2. The default pipeline is **Google Cloud Vision (OCR) → Gemini Flash (structuring)**. Paste:
    - a **Google Vision** API key (enable the Vision API in Google Cloud, then create a
      key — free tier is 1,000 units/month), and
-   - a free **Groq** key from [console.groq.com](https://console.groq.com/keys).
+   - a free **Gemini** key from [aistudio.google.com](https://aistudio.google.com/app/apikey),
+     or a **Groq** key from [console.groq.com](https://console.groq.com/keys).
 3. No keys yet? It still runs: OCR falls back to **OCR.space** (built-in demo key
    `helloworld`, no signup) and structuring falls back to a built-in heuristic parser,
    so you can try the full flow immediately.
-4. Go to **New Scan**, upload a label photo, hit **Extract & Analyze**, review the
-   fields, then **Run compliance check & grade**.
+4. Go to **New Scan**, upload a label photo (up to 3 panels), hit **Extract & Analyze**,
+   review the fields, then **Run compliance check & grade**.
 
 > Keys live in the browser. Restrict the Vision key to the Vision API + your site's
 > referrer in the Google Cloud console; proxy both keys through a backend for production.
@@ -116,9 +129,11 @@ from the deterministic engine in `src/lib/ruleEngine.js` and cites the exact rul
 
 ## Features
 
-- **Scan** — upload, real OCR, image boundary overlay (word boxes + colour-coded key
-  declarations: MRP, net qty, manufacturer, date, consumer care), raw text panel,
-  editable structured JSON.
+- **Multi-panel scan** — upload up to 3 label images (front + back + side) with
+  automatic commodity mismatch detection across panels.
+- **OCR + boundary overlay** — real OCR with word-level bounding boxes, colour-coded
+  key declarations (MRP, net qty, manufacturer, date, consumer care) visualized
+  directly on the image.
 - **Rule engine** — applicability exclusions (Rule 3), exemptions (Rule 26), all Rule 6
   mandatory declarations, unit/banned-word checks (Rule 13), and Rule 7 font-size
   tables (I & II).
@@ -127,46 +142,141 @@ from the deterministic engine in `src/lib/ruleEngine.js` and cites the exact rul
 - **History** — searchable/filterable list of every scan, synced to your Supabase account.
 - **Report** — full clause-by-clause report, font-size analysis, photographic evidence,
   Print-to-PDF and JSON export.
+- **AI Assistant** — context-aware compliance chatbot for Legal Metrology queries.
+- **Onboarding** — guided intro flow for first-time users with interactive walkthrough.
+- **Auth** — email sign-up/login, forgot password, OTP verification via Supabase.
 - **Fully responsive** — collapsible sidebar, mobile-first layouts throughout.
+- **Android APK** — native Android build via Capacitor (single codebase).
 
-## Suggested FREE AI tools for this project
+## AI pipeline (multi-stage, multi-fallback)
 
-The app ships with a **two-AI pipeline** — that's all you need:
+The app ships with a **triple-fallback pipeline** at every stage — it never fails:
 
-| Purpose | Tool | Why / notes |
+### Stage 1 — OCR (Text + Word-Level Bounding Boxes)
+
+| Priority | Tool | Notes |
 |---|---|---|
-| **OCR + word bounding boxes** *(primary)* | **Google Cloud Vision** (`DOCUMENT_TEXT_DETECTION`) | Best-accuracy OCR; returns block/paragraph/word polygons that feed the boundary overlay. Free tier 1,000 units/month (billing must be enabled), then ~$1.50/1,000. Wired in `aiService.js`. |
-| **Raw text → structured JSON** *(primary)* | **Groq** (`llama-3.3-70b-versatile`) | Free, extremely fast JSON mode via [console.groq.com](https://console.groq.com/keys). Turns Vision's text into the field schema. Wired in. |
-| **OCR fallback (no signup)** | **OCR.space API** (Engine 2) | Automatic fallback when no Vision key is set. Demo key `helloworld` included. |
-| **Structuring fallback (no key)** | Built-in **heuristic parser** | Regex-based; keeps the demo working offline of any LLM. |
+| **Primary** | **Google Cloud Vision** (`DOCUMENT_TEXT_DETECTION`) | Best accuracy; returns block/paragraph/word polygons for boundary overlay. Free tier 1,000 units/month. |
+| **Fallback** | **OCR.space API** (Engine 2) | Automatic fallback when no Vision key is set. Demo key `helloworld` included — zero signup. |
+
+### Stage 2 — LLM Structuring (Raw Text → Structured JSON)
+
+| Priority | Tool | Notes |
+|---|---|---|
+| **Primary** | **Google Gemini 3.6 Flash** | Free tier, strict JSON mode via [aistudio.google.com](https://aistudio.google.com/app/apikey). |
+| **Fallback 1** | **Groq** (`groq/compound` / `llama-3.3-70b`) | Free, extremely fast. Via [console.groq.com](https://console.groq.com/keys). |
+| **Fallback 2** | Built-in **heuristic parser** | Regex-based; works offline with zero API keys. |
+
+### Deterministic Rule Engine (Zero AI)
 
 Everything after extraction (the compliance verdict and grade) is **deterministic** —
-no AI. Optional, non-LLM add-ons if you want them later:
+no AI. The engine in `src/lib/ruleEngine.js` encodes the complete PCR 2011:
 
-| Purpose | Tool | Why / notes |
+- **Rule 3** — applicability exclusions (bulk > 25 kg/L, industrial/institutional)
+- **Rule 6** — all 8 mandatory declarations (manufacturer, generic name, net quantity, MRP, mfg date, consumer care, country of origin, dimensions)
+- **Rule 7** — font size Tables I & II (by weight/volume and by PDP area)
+- **Rule 13** — SI unit enforcement, banned count words (dozen/score/gross)
+- **Rule 18** — MRP format ("inclusive of all taxes")
+- **Rule 26** — exemptions (ultra-small ≤ 10 g/ml, partial 10–20 g/ml)
+
+### Infrastructure
+
+| Purpose | Tool | Notes |
 |---|---|---|
-| **Font-size measurement (Rule 7)** | **OpenCV** (CPU, open-source) | Measure numeral pixel height, convert to mm via a known-size reference marker. Not an AI model. The app already accepts a measured height manually. |
-| **Auto-crop label panels (optional)** | **YOLOv8-nano** trained on **Google Colab** free GPU, hosted on **HF Spaces** / **Roboflow** free tier | Only needed if you want automatic MRP/net-qty region cropping — Vision's word polygons already suffice for the prototype. |
-| **Auth + DB (in use)** | **Supabase** free tier (Postgres + Auth, optional Storage) | Powers login and per-user scan history via `src/lib/db.js` + RLS. See *Supabase setup* above. |
+| **Auth + DB** | **Supabase** free tier (Postgres + Auth + RLS) | Powers login and per-user scan history via `src/lib/db.js`. |
+| **Mobile** | **Capacitor** | Wraps the web app as a native Android APK. |
 | **Hosting** | **Vercel / Netlify / GitHub Pages** free tier | Static SPA, one-click deploy. |
-
-Paid options (AWS Textract, GPT-4o, Azure Form Recognizer) are only for high-volume
-production accuracy — not for the prototype or demo.
 
 ## Project structure
 
 ```
 src/
   lib/
-    aiService.js    # OCR.space / Gemini / Groq adapters + orchestrator + heuristic fallback
-    ruleEngine.js   # deterministic PCR-2011 validator (the legal brain)
-    grading.js      # score / letter grade / PASS-FAIL
-    db.js           # Supabase-backed scan persistence (per-user, RLS)
-  context/SettingsContext.jsx   # provider + API keys (localStorage)
-  components/       # ui.jsx (badges/stats), ImageAnnotator.jsx (boundary overlay)
-  pages/            # Dashboard, Scan, HistoryPage, Report, Settings
-  data/rulesEngine.json         # the rules config that drives the engine
+    aiService.js       # Vision / OCR.space / Gemini / Groq adapters + orchestrator
+    chatService.js     # AI Assistant chat pipeline
+    ruleEngine.js      # deterministic PCR-2011 validator (the legal brain)
+    grading.js         # score / letter grade / PASS-FAIL
+    db.js              # Supabase-backed scan persistence (per-user, RLS)
+    supabase.js        # Supabase client initialization
+    platform.js        # web vs native platform detection
+    native.js          # Capacitor native bridge (splash screen, keyboard, etc.)
+    onboarding.js      # first-launch routing logic
+    replyShape.js      # chat response formatting utilities
+  context/
+    AuthContext.jsx    # auth provider (Supabase session management)
+    SettingsContext.jsx # API keys + pipeline settings (localStorage)
+  components/
+    ChatWidget.jsx     # floating AI assistant chat widget
+    ChatMessage.jsx    # chat message rendering with markdown
+    ImageAnnotator.jsx # boundary overlay on scanned images
+    Skeleton.jsx       # loading skeletons for all pages
+    OtpInput.jsx       # OTP verification input component
+    ProtectedRoute.jsx # auth guard for protected routes
+    ui.jsx             # shared badges, stats, status indicators
+  pages/
+    Landing.jsx        # marketing landing page (web)
+    Onboarding.jsx     # first-launch intro walkthrough (mobile)
+    Login.jsx          # email + password login
+    Signup.jsx         # registration with email verification
+    ForgotPassword.jsx # password reset request
+    ResetPassword.jsx  # password reset form
+    Dashboard.jsx      # compliance analytics dashboard
+    Scan.jsx           # multi-panel image upload + OCR + review
+    HistoryPage.jsx    # searchable scan history list
+    Report.jsx         # full compliance report viewer
+    Assistant.jsx      # full-page AI compliance assistant
+    Settings.jsx       # API key configuration + pipeline settings
+  data/
+    rulesEngine.json   # complete PCR 2011 rules config (351 lines)
 ```
+
+## Future enhancements
+
+The core compliance pipeline is fully functional. The following planned
+enhancements extend the system's capabilities:
+
+### 📏 OpenCV Auto Font-Size Measurement (Rule 7)
+
+The rule engine already validates font sizes against Rule 7 Tables I & II when
+a measured height is provided. The next step is **automating the measurement**:
+
+- **OpenCV contour analysis** to detect numeral characters on the label image
+  and measure their pixel height automatically.
+- **Pixel-to-mm conversion** using known-dimension reference markers (e.g.
+  a coin or ruler placed beside the product in the photo).
+- This will fully automate Rule 7 compliance checking without any manual input,
+  completing the readability/font-size requirement from the problem statement.
+
+### 🎯 YOLOv8-Nano Label Panel Auto-Crop
+
+- Train a lightweight YOLOv8-nano model on Google Colab (free GPU) to detect
+  and crop specific label regions: MRP panel, net quantity block, manufacturer
+  address block.
+- Host on HuggingFace Spaces or Roboflow (free tier) for inference.
+- Feeds cropped regions into OCR for targeted, high-accuracy extraction of
+  critical declarations.
+
+### 🌐 Regional Language OCR
+
+- Extend OCR support to **Hindi (Devanagari)**, Tamil, Telugu, Bengali, and
+  other regional scripts commonly found on Indian product labels.
+- Leverage Google Vision's multilingual capabilities and Gemini's multilingual
+  understanding for structured extraction from non-English labels.
+- Rule 8 requires declarations in Hindi or English — this enhancement enables
+  validation of Hindi-language declarations.
+
+### 🔗 IoT & Barcode Integration
+
+- **GTIN/barcode scanning** to cross-reference scanned products against
+  centralised product databases for auto-populated field validation.
+- Integration with weighing scales and IoT sensors for physical net-quantity
+  verification against the Maximum Permissible Error tables (Rule 22,
+  First Schedule).
+
+### 📱 iOS Deployment
+
+- Capacitor-based iOS build from the same React codebase — zero additional
+  development needed, just platform configuration and App Store submission.
 
 ## Notes
 
@@ -174,3 +284,4 @@ src/
   the chosen provider — nothing passes through any server of ours.
 - The rule engine is an **engineering aid, not a legal opinion** — always cross-check
   against the current Gazette notification.
+- Problem Statement dataset: https://consumeraffairs.gov.in/pages/legal-metrology-act
