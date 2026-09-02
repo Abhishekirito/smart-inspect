@@ -54,6 +54,7 @@ export default function Scan() {
   const [meta, setMeta] = useState({ molded: false, measuredHeightMm: '', pdpAreaCm2: '', is_imported: false, buyer_type: 'retail' })
   const [showInspect, setShowInspect] = useState(false)
   const [inspectTab, setInspectTab] = useState('fields') // 'fields' | 'ocr' | 'physical'
+  const [generatingReport, setGeneratingReport] = useState(false)
 
   const handleFiles = useCallback(async (fileList) => {
     if (!fileList || !fileList.length) return
@@ -97,39 +98,46 @@ export default function Scan() {
   const setField = (k, v) => setStructured((s) => ({ ...s, [k]: v }))
 
   const runAnalyze = async () => {
-    if (!structured || result?.isMismatch) return
-    const st = {
-      ...structured,
-      net_quantity_value: structured.net_quantity_value === '' || structured.net_quantity_value == null ? null : Number(structured.net_quantity_value),
-      is_imported: meta.is_imported || !!structured.is_imported,
-      buyer_type: meta.buyer_type,
+    if (!structured || result?.isMismatch || generatingReport) return
+    setGeneratingReport(true)
+    setError('')
+    try {
+      const st = {
+        ...structured,
+        net_quantity_value: structured.net_quantity_value === '' || structured.net_quantity_value == null ? null : Number(structured.net_quantity_value),
+        is_imported: meta.is_imported || !!structured.is_imported,
+        buyer_type: meta.buyer_type,
+      }
+      const m = {
+        molded: meta.molded,
+        measuredHeightMm: meta.measuredHeightMm === '' ? null : Number(meta.measuredHeightMm),
+        pdpAreaCm2: meta.pdpAreaCm2 === '' ? null : Number(meta.pdpAreaCm2),
+      }
+      const report = evaluate(st, m)
+      const scan = {
+        id: uid(),
+        createdAt: Date.now(),
+        officer: settings.officerName,
+        region: settings.region,
+        productName: st.product_name || st.common_generic_name || 'Unnamed product',
+        image: previews[0] || null,
+        images: previews,
+        words: result.words,
+        rawText: result.rawText,
+        source: result.source,
+        structured: st,
+        meta: m,
+        report,
+      }
+      await saveScan(scan)
+      navigate(`/app/report/${scan.id}`)
+    } catch (e) {
+      setError(e.message || 'Failed to generate report. Please try again.')
+      setGeneratingReport(false)
     }
-    const m = {
-      molded: meta.molded,
-      measuredHeightMm: meta.measuredHeightMm === '' ? null : Number(meta.measuredHeightMm),
-      pdpAreaCm2: meta.pdpAreaCm2 === '' ? null : Number(meta.pdpAreaCm2),
-    }
-    const report = evaluate(st, m)
-    const scan = {
-      id: uid(),
-      createdAt: Date.now(),
-      officer: settings.officerName,
-      region: settings.region,
-      productName: st.product_name || st.common_generic_name || 'Unnamed product',
-      image: previews[0] || null,
-      images: previews,
-      words: result.words,
-      rawText: result.rawText,
-      source: result.source,
-      structured: st,
-      meta: m,
-      report,
-    }
-    await saveScan(scan)
-    navigate(`/app/report/${scan.id}`)
   }
 
-  const reset = () => { setFiles([]); setPreviews([]); setResult(null); setStructured(null); setError(''); setShowInspect(false) }
+  const reset = () => { setFiles([]); setPreviews([]); setResult(null); setStructured(null); setError(''); setShowInspect(false); setGeneratingReport(false) }
 
   return (
     <div className="mx-auto max-w-5xl space-y-5">
@@ -269,14 +277,14 @@ export default function Scan() {
               </button>
 
               <button
-                className={`btn-primary flex items-center gap-2 px-6 py-2.5 text-base shadow-sm ${result.isMismatch ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`btn-primary flex items-center gap-2 px-6 py-2.5 text-base shadow-sm ${result.isMismatch || generatingReport ? 'opacity-50 cursor-not-allowed' : ''}`}
                 onClick={runAnalyze}
-                disabled={result.isMismatch}
-                title={result.isMismatch ? 'Cannot generate report for mismatched product images' : 'Generate compliance report'}
+                disabled={result.isMismatch || generatingReport}
+                title={result.isMismatch ? 'Cannot generate report for mismatched product images' : generatingReport ? 'Saving scan and generating report...' : 'Generate compliance report'}
               >
-                <FileText size={18} />
-                <span>Generate Full Report</span>
-                <ChevronRight size={18} />
+                {generatingReport ? <Loader2 className="animate-spin" size={18} /> : <FileText size={18} />}
+                <span>{generatingReport ? 'Generating Report…' : 'Generate Full Report'}</span>
+                {!generatingReport && <ChevronRight size={18} />}
               </button>
             </div>
 
