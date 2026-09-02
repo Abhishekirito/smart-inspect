@@ -2,12 +2,12 @@ import { useState } from 'react'
 import { useSettings } from '../context/SettingsContext.jsx'
 import { clearAll } from '../lib/db.js'
 import {
-  KeyRound, Cpu, User, Trash2, CheckCircle2, ExternalLink, ScanText, Zap, ShieldAlert, Sparkles,
+  Cpu, User, Trash2, CheckCircle2, ScanText, Zap, Sparkles, ShieldCheck,
 } from 'lucide-react'
 
 const OCR_ENGINES = [
-  { id: 'vision', name: 'Google Cloud Vision', icon: ScanText, desc: 'DOCUMENT_TEXT_DETECTION — high-accuracy OCR with word bounding boxes for the boundary overlay.', free: 'Free tier: 1,000 units/month', url: 'https://console.cloud.google.com/apis/library/vision.googleapis.com' },
-  { id: 'ocrspace', name: 'OCR.space (fallback)', icon: ScanText, desc: 'No-signup fallback. Used automatically if no Vision key is set.', free: 'Free demo key included', url: 'https://ocr.space/ocrapi/freekey' },
+  { id: 'vision', name: 'Google Cloud Vision', icon: ScanText, desc: 'DOCUMENT_TEXT_DETECTION — high-accuracy OCR with word bounding boxes for the boundary overlay.', free: 'Free tier: 1,000 units/month' },
+  { id: 'ocrspace', name: 'OCR.space (fallback)', icon: ScanText, desc: 'No-signup fallback. Used automatically if no Vision key is set.', free: 'Free demo key included' },
 ]
 
 export default function Settings() {
@@ -22,7 +22,7 @@ export default function Settings() {
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
         <h1 className="text-2xl font-extrabold text-slate-800">Settings</h1>
-        <p className="text-sm text-slate-400">Pipeline: <b>Google Vision</b> (OCR + boxes) → <b>Groq</b> (structure into JSON) → deterministic rule engine. Keys are stored only in your browser and sent directly to the provider.</p>
+        <p className="text-sm text-slate-400">Pipeline: <b>Google Vision</b> (OCR + boxes) → <b>Gemini Flash</b> (structure into JSON) → deterministic rule engine.</p>
       </div>
 
       {/* OCR engine */}
@@ -66,44 +66,11 @@ export default function Settings() {
         </div>
       </div>
 
-      {/* Keys */}
-      <div className="card space-y-5 p-5">
-        <div className="flex items-center gap-2 font-bold text-slate-800"><KeyRound size={18} /> API keys</div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="label">Google Gemini API key</label>
-            <input className="input" type="password" placeholder="AIza…" value={settings.geminiKey} onChange={(e) => update({ geminiKey: e.target.value })} onBlur={flash} />
-            <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-brand-600">Get a free Gemini API key <ExternalLink size={12} /></a>
-          </div>
-
-          <div>
-            <label className="label">Google Cloud Vision API key</label>
-            <input className="input" type="password" placeholder="AIza…" value={settings.visionKey} onChange={(e) => update({ visionKey: e.target.value })} onBlur={flash} />
-            <a href={OCR_ENGINES[0].url} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-brand-600">Enable Vision API key <ExternalLink size={12} /></a>
-          </div>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="label">Groq API key</label>
-            <input className="input" type="password" placeholder="gsk_…" value={settings.groqKey} onChange={(e) => update({ groqKey: e.target.value })} onBlur={flash} />
-            <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-brand-600">Get a free Groq key <ExternalLink size={12} /></a>
-          </div>
-          <div>
-            <label className="label">Groq model</label>
-            <input className="input" value={settings.groqModel} onChange={(e) => update({ groqModel: e.target.value })} onBlur={flash} />
-          </div>
-        </div>
-
-        <div>
-          <label className="label">OCR.space key (fallback)</label>
-          <input className="input" value={settings.ocrSpaceKey} onChange={(e) => update({ ocrSpaceKey: e.target.value })} onBlur={flash} />
-        </div>
-
-        <div className="flex items-start gap-2 rounded-xl bg-amber-50 p-3 text-xs text-amber-700 ring-1 ring-amber-200">
-          <ShieldAlert size={15} className="mt-0.5 shrink-0" />
-          <span>Keys live in the browser and are sent directly to the API providers. For production, proxy keys through a backend.</span>
+      {/* API Status */}
+      <div className="card p-5">
+        <div className="flex items-start gap-2 rounded-xl bg-emerald-50 p-3 text-xs text-emerald-700 ring-1 ring-emerald-200">
+          <ShieldCheck size={15} className="mt-0.5 shrink-0" />
+          <span>API keys are securely managed via environment variables and are never exposed in the browser UI. Configure them in your <b>.env</b> file (local dev) or <b>Vercel Dashboard → Settings → Environment Variables</b> (production).</span>
         </div>
       </div>
 
@@ -125,7 +92,7 @@ export default function Settings() {
       <div className="card flex flex-wrap items-center justify-between gap-3 p-5">
         <div>
           <div className="font-bold text-slate-800">Clear all local data</div>
-          <div className="text-sm text-slate-400">Permanently deletes every stored scan and report from this browser.</div>
+          <div className="text-sm text-slate-400">Permanently deletes every stored scan and report.</div>
         </div>
         <button className="btn-outline !border-red-200 !text-red-600 hover:!bg-red-50"
           onClick={async () => { if (confirm('Delete ALL scans?')) { await clearAll(); setCleared(true); setTimeout(() => setCleared(false), 1600) } }}>

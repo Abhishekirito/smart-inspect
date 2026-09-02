@@ -1,5 +1,6 @@
 // AI service layer — pluggable, real free-tier cloud APIs, called directly from
-// the browser. No backend. Keys come from Settings (localStorage).
+// the browser. API keys come from environment variables (set in .env locally or
+// in the Vercel dashboard for production).
 //
 //   OCR.space   -> raw text + per-word bounding boxes (boundary visualization)
 //   Gemini      -> multimodal OCR + JSON structuring (free tier)
@@ -318,7 +319,7 @@ export async function extractAll(filesInput, settings) {
   let ocrSources = []
   let warnMsg = ''
 
-  // 1) OCR — process up to 2 uploaded images
+  // 1) OCR — process up to 3 uploaded images
   for (let i = 0; i < files.length; i++) {
     const f = files[i]
     let ocr
@@ -327,7 +328,7 @@ export async function extractAll(filesInput, settings) {
       catch (e) { ocr = await ocrSpace(f, settings.ocrSpaceKey); warnMsg = `Google Vision failed on image ${i + 1}, used OCR.space: ` + e.message }
     } else {
       ocr = await ocrSpace(f, settings.ocrSpaceKey)
-      if (engine === 'vision' && i === 0) warnMsg = 'No Google Vision key set — used OCR.space. Add a key in Settings.'
+      if (engine === 'vision' && i === 0) warnMsg = 'No Google Vision key set — used OCR.space.'
     }
 
     if (files.length > 1) {

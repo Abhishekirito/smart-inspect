@@ -2,18 +2,26 @@ import { createContext, useContext, useEffect, useState } from 'react'
 
 const KEY = 'smart-inspect-settings'
 
-const getDefaults = () => ({
-  // Recommended stack: Google Vision (OCR) + Gemini / Groq (structuring)
-  ocrEngine: 'vision',         // 'vision' | 'ocrspace'
-  structuringEngine: 'gemini', // 'gemini' | 'groq'
+// API keys are sourced ONLY from environment variables (set in .env locally or
+// in the Vercel dashboard for production). They are never configurable via the
+// UI and are never persisted to localStorage — Vercel's env var encryption
+// handles security. Only non-sensitive preferences (officer name, region,
+// engine choice) are stored in localStorage.
+const ENV_KEYS = {
   visionKey: import.meta.env.VITE_GOOGLE_VISION_API_KEY || import.meta.env.VITE_VISION_API_KEY || '',
   groqKey: import.meta.env.VITE_GROQ_API_KEY || '',
   groqModel: import.meta.env.VITE_GROQ_MODEL || 'groq/compound',
-  ocrSpaceKey: import.meta.env.VITE_OCR_SPACE_API_KEY || 'helloworld',   // OCR.space public demo key — no-signup fallback
+  ocrSpaceKey: import.meta.env.VITE_OCR_SPACE_API_KEY || 'helloworld',
   geminiKey: import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_GOOGLE_VISION_API_KEY || '',
   geminiModel: import.meta.env.VITE_GEMINI_MODEL || 'gemini-3.6-flash',
+}
+
+const getDefaults = () => ({
+  ocrEngine: 'vision',         // 'vision' | 'ocrspace'
+  structuringEngine: 'gemini', // 'gemini' | 'groq'
   officerName: 'Inspector',
   region: '',
+  ...ENV_KEYS,
 })
 
 const SettingsContext = createContext(null)
@@ -25,13 +33,10 @@ export function SettingsProvider({ children }) {
       const saved = JSON.parse(localStorage.getItem(KEY) || '{}')
       return {
         ...defaults,
-        ...saved,
-        // Prioritize explicit environment variables from .env over stale localStorage
-        geminiModel: import.meta.env.VITE_GEMINI_MODEL || saved.geminiModel || defaults.geminiModel,
-        groqModel: import.meta.env.VITE_GROQ_MODEL || saved.groqModel || defaults.groqModel,
-        groqKey: import.meta.env.VITE_GROQ_API_KEY || saved.groqKey || defaults.groqKey,
-        geminiKey: import.meta.env.VITE_GEMINI_API_KEY || saved.geminiKey || defaults.geminiKey,
-        visionKey: import.meta.env.VITE_GOOGLE_VISION_API_KEY || import.meta.env.VITE_VISION_API_KEY || saved.visionKey || defaults.visionKey,
+        // Only restore non-key preferences from localStorage
+        ocrEngine: saved.ocrEngine || defaults.ocrEngine,
+        officerName: saved.officerName || defaults.officerName,
+        region: saved.region || defaults.region,
       }
     } catch {
       return defaults
@@ -39,7 +44,9 @@ export function SettingsProvider({ children }) {
   })
 
   useEffect(() => {
-    localStorage.setItem(KEY, JSON.stringify(settings))
+    // Only persist non-sensitive preferences — never API keys
+    const { ocrEngine, officerName, region } = settings
+    localStorage.setItem(KEY, JSON.stringify({ ocrEngine, officerName, region }))
   }, [settings])
 
   const update = (patch) => setSettings((s) => ({ ...s, ...patch }))

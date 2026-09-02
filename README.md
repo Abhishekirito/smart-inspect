@@ -83,31 +83,70 @@ create policy "own scans - delete" on public.scans
   for delete using (auth.uid() = user_id);
 ```
 
-**4. Configure auth** — *Authentication → Providers → Email*: enable it (on by
+**4. Create the `scan-images` storage bucket.** In the Supabase dashboard, go to
+*Storage → New bucket*, name it `scan-images`, and set it to **private**. Then run
+this SQL to add RLS policies so each user can only access their own images:
+
+```sql
+-- Storage policies: each user can only manage files under their own user-id folder.
+create policy "user upload" on storage.objects
+  for insert with check (
+    bucket_id = 'scan-images' and
+    (storage.foldername(name))[1] = auth.uid()::text
+  );
+create policy "user read" on storage.objects
+  for select using (
+    bucket_id = 'scan-images' and
+    (storage.foldername(name))[1] = auth.uid()::text
+  );
+create policy "user delete" on storage.objects
+  for delete using (
+    bucket_id = 'scan-images' and
+    (storage.foldername(name))[1] = auth.uid()::text
+  );
+```
+
+**5. Configure auth** — *Authentication → Providers → Email*: enable it (on by
 default). For quick local testing you can turn **"Confirm email" off** so sign-up
 logs you straight in; leave it **on** for production and the app will show a
 "check your inbox" screen after sign-up. Under *Authentication → URL Configuration*,
 add your dev/prod origins (e.g. `http://localhost:5173`) to the redirect allow-list.
 
-**5. Restart the dev server** so Vite picks up the new `.env`, then open the app,
+**6. Restart the dev server** so Vite picks up the new `.env`, then open the app,
 sign up, and run a scan — it will be stored in the `scans` table under your user.
 
-> Scan images are embedded in the `data` JSON as data URLs. For heavy usage, move
-> them to Supabase **Storage** and keep only the object path in the row.
+> Scan images are automatically offloaded to the `scan-images` Storage bucket.
+> The `data` JSONB column stores only lightweight `storage://` path references
+> (~5 KB per scan instead of ~3 MB), keeping the database lean.
+
+## Production deployment (Vercel)
+
+**1.** Deploy to Vercel (connect your Git repo or `vercel deploy`).
+
+**2.** Add these **Environment Variables** in *Vercel Dashboard → Settings → Environment Variables*:
+
+| Variable | Description |
+|---|---|
+| `VITE_GOOGLE_VISION_API_KEY` | Google Cloud Vision API key |
+| `VITE_GEMINI_API_KEY` | Google Gemini API key |
+| `VITE_GROQ_API_KEY` | Groq API key (auto-fallback) |
+| `VITE_OCR_SPACE_API_KEY` | OCR.space API key (optional, defaults to `helloworld`) |
+| `VITE_SUPABASE_URL` | Your Supabase project URL |
+| `VITE_SUPABASE_ANON_KEY` | Supabase anon/public key |
+
+> Vercel encrypts environment variables at rest and injects them at build time.
+> API keys are **not** configurable in the browser UI — they are baked into the
+> build from env vars, keeping the Settings page clean and secure.
 
 
 ## First-run setup
 
-1. Open **Settings**.
-2. The default pipeline is **Google Cloud Vision (OCR) → Gemini Flash (structuring)**. Paste:
-   - a **Google Vision** API key (enable the Vision API in Google Cloud, then create a
-     key — free tier is 1,000 units/month), and
-   - a free **Gemini** key from [aistudio.google.com](https://aistudio.google.com/app/apikey),
-     or a **Groq** key from [console.groq.com](https://console.groq.com/keys).
-3. No keys yet? It still runs: OCR falls back to **OCR.space** (built-in demo key
+1. Copy `.env.example` to `.env` and fill in your API keys.
+2. The default pipeline is **Google Cloud Vision** (OCR) → **Gemini Flash** (structuring).
+   No keys yet? It still runs: OCR falls back to **OCR.space** (built-in demo key
    `helloworld`, no signup) and structuring falls back to a built-in heuristic parser,
    so you can try the full flow immediately.
-4. Go to **New Scan**, upload a label photo (up to 3 panels), hit **Extract & Analyze**,
+3. Go to **New Scan**, upload a label photo (up to 3 panels), hit **Extract & Analyze**,
    review the fields, then **Run compliance check & grade**.
 
 > Keys live in the browser. Restrict the Vision key to the Vision API + your site's
