@@ -1,6 +1,6 @@
 // Auth state provider backed by Supabase. Exposes the current session/user and
-// sign-in / sign-up / OTP-verify / password-reset / sign-out helpers to the whole
-// app via useAuth().
+// sign-in / sign-up / password-reset / sign-out helpers to the whole app via
+// useAuth(). Sign-up sends a confirmation email link (not an OTP code).
 import { createContext, useContext, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase.js'
@@ -52,7 +52,8 @@ export function AuthProvider({ children }) {
     signIn: (email, password) =>
       supabase.auth.signInWithPassword({ email, password }),
 
-    // Sends confirmation email. Returns active session once verified.
+    // Sends a confirmation email with a magic link. Once the user clicks
+    // the link they are redirected back to /app with an active session.
     signUp: (email, password, meta = {}) =>
       supabase.auth.signUp({
         email,
@@ -62,16 +63,6 @@ export function AuthProvider({ children }) {
           emailRedirectTo: `${window.location.origin}/app`,
         },
       }),
-
-    // Confirms the 6-digit signup code. `type` must be 'signup' — the type the sign-up
-    // token was issued with; 'email' is the passwordless sign-in OTP and rejects this
-    // token. Requires the Supabase "Confirm signup" email template to include {{ .Token }}.
-    verifySignupOtp: (email, token) =>
-      supabase.auth.verifyOtp({ email, token: token.trim(), type: 'signup' }),
-
-    // Re-sends the signup confirmation email.
-    resendSignupOtp: (email) =>
-      supabase.auth.resend({ type: 'signup', email, options: { emailRedirectTo: `${window.location.origin}/app` } }),
 
     // Emails a password-reset link that redirects back to this app's /reset-password route.
     resetPassword: (email) =>

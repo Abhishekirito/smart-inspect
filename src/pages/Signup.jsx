@@ -2,25 +2,22 @@ import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   ShieldCheck, Loader2, Mail, Lock, User, AlertCircle, ArrowLeft,
-  MailCheck, RotateCcw,
+  MailCheck,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { isSupabaseConfigured } from '../lib/supabase.js'
 import { isAppShell } from '../lib/platform.js'
-import OtpInput from '../components/OtpInput.jsx'
 
 export default function Signup() {
-  const { session, signUp, verifySignupOtp, resendSignupOtp } = useAuth()
+  const { session, signUp } = useAuth()
   const navigate = useNavigate()
 
-  const [step, setStep] = useState('form') // 'form' | 'verify'
+  const [step, setStep] = useState('form') // 'form' | 'sent'
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const [info, setInfo] = useState('')
 
   // If session gets established (e.g. user clicked email link), auto-navigate to /app
   useEffect(() => {
@@ -45,34 +42,17 @@ export default function Signup() {
     if (error) { setError(error.message); return }
     // Email confirmation OFF → a session is returned; go straight in.
     if (data?.session) { navigate('/app', { replace: true }); return }
-    // Email confirmation ON → move to the code-entry step.
-    setStep('verify')
+    // Email confirmation ON → show "check your email" message.
+    setStep('sent')
   }
 
-  const verify = async (value) => {
-    const token = (value ?? code).trim()
-    if (token.length !== 6) return
-    setBusy(true); setError(''); setInfo('')
-    const { data, error } = await verifySignupOtp(email.trim(), token)
-    setBusy(false)
-    if (error) { setError(error.message); return }
-    if (data?.session) navigate('/app', { replace: true })
-    else setError('Could not establish a session. Please try signing in.')
-  }
-  const resend = async () => {
-    setBusy(true); setError(''); setInfo('')
-    const { error } = await resendSignupOtp(email.trim())
-    setBusy(false)
-    if (error) { setError(error.message); return }
-    setInfo('A fresh confirmation link / code has been sent to your inbox.')
-  }
-
-  if (step === 'verify') {
+  // ── "Check your email" screen after sign-up ──────────────────────────
+  if (step === 'sent') {
     return (
       <div className="grid min-h-full place-items-center bg-gradient-to-b from-white to-slate-50 px-4 py-10">
         <div className="w-full max-w-md">
           <button
-            onClick={() => { setStep('form'); setCode(''); setError(''); setInfo('') }}
+            onClick={() => { setStep('form'); setError('') }}
             className="mb-6 inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-700"
           >
             <ArrowLeft size={16} /> Edit details
@@ -85,49 +65,38 @@ export default function Signup() {
               </div>
               <div>
                 <h1 className="text-lg font-extrabold text-slate-800">Check your inbox</h1>
-                <p className="text-xs text-slate-400">Confirm email link or 6-digit code</p>
+                <p className="text-xs text-slate-400">Confirm your email to get started</p>
               </div>
             </div>
 
             <p className="mb-5 text-sm text-slate-500 leading-relaxed">
-              We sent a confirmation email to <b className="text-slate-700">{email}</b>. Click the link in your email to log in automatically, or enter the 6-digit code below.
+              We sent a confirmation email to <b className="text-slate-700">{email}</b>.
+              Click the link in the email to activate your account and log in automatically.
             </p>
 
-            {error && (
-              <div className="mb-4 flex items-start gap-2 rounded-xl bg-red-50 p-3 text-sm text-red-700 ring-1 ring-red-200">
-                <AlertCircle size={16} className="mt-0.5 shrink-0" /> <span>{error}</span>
-              </div>
-            )}
-            {info && (
-              <div className="mb-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700 ring-1 ring-emerald-200">
-                {info}
-              </div>
-            )}
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Didn't receive it? Check your spam folder or{' '}
+              <button
+                onClick={() => { setStep('form'); setError('') }}
+                className="font-semibold text-brand-600 hover:text-brand-700"
+              >
+                try again with a different email
+              </button>.
+            </p>
 
-            <OtpInput value={code} onChange={setCode} onComplete={(v) => verify(v)} disabled={busy} />
-
-            <button
-              onClick={() => verify()}
-              className="btn-primary mt-6 w-full py-3"
-              disabled={busy || code.length !== 6}
+            <Link
+              to="/login"
+              className="btn-primary mt-6 flex w-full items-center justify-center py-3"
             >
-              {busy ? <Loader2 className="animate-spin" size={18} /> : null}
-              {busy ? 'Verifying…' : 'Verify & continue'}
-            </button>
-
-            <button
-              onClick={resend}
-              disabled={busy}
-              className="mt-3 inline-flex w-full items-center justify-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-700 disabled:opacity-50"
-            >
-              <RotateCcw size={14} /> Didn't get it? Resend code
-            </button>
+              Go to Sign in
+            </Link>
           </div>
         </div>
       </div>
     )
   }
 
+  // ── Sign-up form ─────────────────────────────────────────────────────
   return (
     <div className="grid min-h-full place-items-center bg-gradient-to-b from-white to-slate-50 px-4 py-10">
       <div className="w-full max-w-md">
