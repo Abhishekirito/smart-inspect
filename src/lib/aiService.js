@@ -199,40 +199,33 @@ export async function geminiStructure(rawText, key, model = DEFAULT_GEMINI_MODEL
   if (!key) throw new Error('Gemini API key missing (get a free key at https://aistudio.google.com/app/apikey).')
   const trimmedText = (rawText || '').slice(0, 4000)
   const targetModel = model || DEFAULT_GEMINI_MODEL
-  const modelsToTry = [targetModel, DEFAULT_GEMINI_MODEL, 'gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-1.5-flash'].filter((m, i, a) => m && a.indexOf(m) === i)
 
-  let lastError = null
-  for (const m of modelsToTry) {
-    try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${key}`
-      const body = {
-        contents: [{ parts: [{ text: `${PROMPT}\n\nLABEL TEXT:\n"""${trimmedText}"""` }] }],
-        generationConfig: { temperature: 0, responseMimeType: 'application/json' },
-      }
-      const res = await fetch(url, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-      })
-      if (!res.ok) {
-        const errText = await res.text()
-        if (res.status === 403 && errText.includes('API_KEY_SERVICE_BLOCKED')) {
-          throw new Error('Gemini API permission denied. Enable Generative Language API on this key or get a free key from https://aistudio.google.com/app/apikey')
-        }
-        if (res.status === 404) {
-          lastError = new Error(`Gemini model ${m} not found (404)`)
-          continue
-        }
-        throw new Error(`Gemini HTTP ${res.status}: ${errText.slice(0, 160)}`)
-      }
-      const data = await res.json()
-      const text = data?.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') || ''
-      const parsed = stripToJSON(text)
-      if (parsed) return parsed
-    } catch (e) {
-      if (e.message.includes('permission denied')) throw e
-      lastError = e
-    }
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${key}`
+  const body = {
+    contents: [{ parts: [{ text: `${PROMPT}\n\nLABEL TEXT:\n"""${trimmedText}"""` }] }],
+    generationConfig: { temperature: 0, responseMimeType: 'application/json' },
   }
-  throw lastError || new Error('Gemini extraction failed.')
+  const res = await fetch(url, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const errText = await res.text()
+    if (res.status === 403 && errText.includes('API_KEY_SERVICE_BLOCKED')) {
+      throw new Error('Gemini API permission denied. Enable Generative Language API on this key or get a free key from https://aistudio.google.com/app/apikey')
+    }
+    if (res.status === 404) {
+      throw new Error(`Gemini model "${targetModel}" not found. Check VITE_GEMINI_MODEL in .env`)
+    }
+    if (res.status === 400) {
+      throw new Error(`Gemini rejected the request (400). Verify your API key is valid: ${errText.slice(0, 120)}`)
+    }
+    throw new Error(`Gemini HTTP ${res.status}: ${errText.slice(0, 160)}`)
+  }
+  const data = await res.json()
+  const text = data?.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') || ''
+  const parsed = stripToJSON(text)
+  if (parsed) return parsed
+  throw new Error('Gemini returned a response but it contained no valid JSON.')
 }
 
 export async function groqStructure(rawText, key, model = DEFAULT_GROQ_MODEL) {
@@ -259,8 +252,14 @@ export async function groqStructure(rawText, key, model = DEFAULT_GROQ_MODEL) {
       const data = await res.json()
       const parsed = stripToJSON(data?.choices?.[0]?.message?.content)
       if (parsed) return parsed
+      console.warn('[Groq] json_object mode returned unparseable content:', data?.choices?.[0]?.message?.content?.slice(0, 200))
+    } else {
+      const errText = await res.text()
+      console.warn(`[Groq] json_object mode HTTP ${res.status}:`, errText.slice(0, 160))
     }
-  } catch (e) {}
+  } catch (e) {
+    console.warn('[Groq] json_object mode error:', e.message)
+  }
 
   // Attempt 2: Standard completion with manual JSON extraction (resilient against 400 validation errors)
   const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -268,10 +267,17 @@ export async function groqStructure(rawText, key, model = DEFAULT_GROQ_MODEL) {
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
     body: JSON.stringify(payload),
   })
-  if (!res.ok) throw new Error(`Groq HTTP ${res.status}: ${(await res.text()).slice(0, 160)}`)
+  if (!res.ok) {
+    const errText = await res.text()
+    throw new Error(`Groq HTTP ${res.status} (model: ${targetModel}): ${errText.slice(0, 160)}`)
+  }
   const data = await res.json()
-  const parsed = stripToJSON(data?.choices?.[0]?.message?.content)
-  if (!parsed) throw new Error('Groq did not return valid JSON content.')
+  const raw = data?.choices?.[0]?.message?.content
+  const parsed = stripToJSON(raw)
+  if (!parsed) {
+    console.warn('[Groq] Could not parse JSON from response:', raw?.slice(0, 300))
+    throw new Error(`Groq (model: ${targetModel}) did not return valid JSON. Check VITE_GROQ_MODEL in .env`)
+  }
   return parsed
 }
 
@@ -366,10 +372,13 @@ export async function extractAll(filesInput, settings) {
 
   // Attempt 1: Gemini Flash (Primary LLM)
   if (isGeminiKeyValid) {
+    const gemModel = settings.geminiModel || 'gemini-3.6-flash'
+    console.log(`[SmartInspect] Structuring via Gemini model="${gemModel}", key="${geminiKey.slice(0, 6)}…"`)
     try {
-      structured = await geminiStructure(promptText, geminiKey, settings.geminiModel || 'gemini-3.6-flash')
-      structuringSource = `Google Gemini (${settings.geminiModel || 'gemini-3.6-flash'})`
+      structured = await geminiStructure(promptText, geminiKey, gemModel)
+      structuringSource = `Google Gemini (${gemModel})`
     } catch (e) {
+      console.error('[SmartInspect] Gemini structuring failed:', e.message)
       fallbackReason = 'Gemini Flash error: ' + e.message
     }
   } else {
